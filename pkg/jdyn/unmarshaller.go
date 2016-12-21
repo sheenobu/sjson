@@ -21,7 +21,7 @@ type Unmarshaller struct {
 func NewUnmarshaller(fieldName string) *Unmarshaller {
 	return &Unmarshaller{
 		Types: Types{
-			types: make(map[string]reflect.Type),
+			types: make(map[string]constructor),
 		},
 		FieldName: fieldName,
 		TagName:   "json",
@@ -40,12 +40,22 @@ func (um *Unmarshaller) Unmarshal(r io.Reader) (i interface{}, err error) {
 		}
 	}()
 
-	i, err = um.loop(ch, errChan, 0)
+	var bl []func()
+	i, bl, err = um.loop(ch, errChan, nil, nil, 0)
+
+	for _, b := range bl {
+		b()
+	}
+
 	return
 }
 
 func (um *Unmarshaller) inject(i interface{}, mt *sjson.MemberToken, childI interface{}) (err error) {
-	tx := reflect.TypeOf(i).Elem()
+	tx := reflect.TypeOf(i)
+
+	if tx.Kind() == reflect.Ptr {
+		tx = tx.Elem()
+	}
 
 	for j := tx.NumField(); j != 0; j-- {
 		f := tx.Field(j - 1)
@@ -53,11 +63,30 @@ func (um *Unmarshaller) inject(i interface{}, mt *sjson.MemberToken, childI inte
 		keyName := strings.Split(js, ",")[0]
 		if mt.Key == keyName {
 			if st, ok := mt.Value.(sjson.SimpleToken); ok {
-				if err = st.Unmarshal(reflect.Indirect(reflect.ValueOf(i)).Field(j - 1).Addr().Interface()); err != nil {
-					return
+				tmp := reflect.Indirect(reflect.ValueOf(i)).Field(j - 1)
+				if tmp.CanAddr() {
+					if err = st.Unmarshal(tmp.Addr().Interface()); err != nil {
+						return
+					}
 				}
 			} else if childI != nil {
 				reflect.Indirect(reflect.ValueOf(i)).Field(j - 1).Set(reflect.ValueOf(childI))
+			} else if childI == nil {
+				tmp := reflect.Indirect(reflect.ValueOf(i)).Field(j - 1)
+
+				if tmp.Kind() == reflect.Ptr && tmp.IsNil() {
+					t := reflect.Indirect(reflect.ValueOf(i)).Field(j - 1).Type()
+					if t.Kind() == reflect.Ptr {
+						t = t.Elem()
+						childI = reflect.New(t).Interface()
+					} else {
+						childI = reflect.Zero(t).Interface()
+					}
+
+					if reflect.ValueOf(childI).IsValid() {
+						reflect.Indirect(reflect.ValueOf(i)).Field(j - 1).Set(reflect.ValueOf(childI))
+					}
+				}
 			}
 		}
 	}
@@ -65,8 +94,18 @@ func (um *Unmarshaller) inject(i interface{}, mt *sjson.MemberToken, childI inte
 	return
 }
 
-func (um *Unmarshaller) loop(ch chan sjson.Token, errChan chan error, loopLevel int) (i interface{}, err error) {
-	var backlog []func()
+func (um *Unmarshaller) loop(ch chan sjson.Token, errChan chan error, mt *sjson.MemberToken, parent interface{}, loopLevel int) (i interface{}, backlog []func(), err error) {
+
+	if parent != nil && mt != nil {
+		for idx := reflect.TypeOf(parent).Elem().NumField() - 1; idx >= 0; idx-- {
+			f := reflect.TypeOf(parent).Elem().Field(idx)
+			ti := f.Tag.Get(um.TagName)
+			t := strings.Split(ti, ",")[0]
+			if mt.Key == t {
+				i = reflect.Indirect(reflect.ValueOf(parent)).Field(idx).Interface()
+			}
+		}
+	}
 
 	var stackCount = 0
 
@@ -86,16 +125,17 @@ L:
 				}
 			}
 
-			if i == nil && stackCount == 1 {
+			if stackCount == 1 {
 				if t.Type() == sjson.MemberType {
 					mt := t.(*sjson.MemberToken)
 					if mt.Key == um.FieldName {
-						i = reflect.New(um.types[fmt.Sprintf("%s", mt.Value)]).Interface()
+						i = um.types[fmt.Sprintf("%s", mt.Value)]()
 					}
 
 					if mt.Value.Type() == sjson.ObjectType {
 						var childI interface{}
-						childI, err = um.loop(ch, errChan, loopLevel+1)
+						var bl []func()
+						childI, bl, err = um.loop(ch, errChan, mt, i, loopLevel+1)
 						if err != nil {
 							break L
 						}
@@ -108,6 +148,7 @@ L:
 								}
 							}
 						}(t))
+						backlog = append(backlog, bl...)
 					}
 				}
 
@@ -126,10 +167,6 @@ L:
 				um.inject(i, mt, nil)
 			}
 		}
-	}
-
-	for _, t := range backlog {
-		t()
 	}
 
 	return
