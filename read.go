@@ -3,9 +3,16 @@ package sjson
 import "io"
 
 // ReadAll reads the entire body and sends each token to the channel
-func ReadAll(r io.Reader, ch chan<- Token) error {
+func ReadAll(r io.Reader, ch chan<- Token) (err error) {
 	dec := NewDecoder(r)
-	return readAll(dec, ch)
+	err = readAll(dec, ch)
+
+	// hide EOFs
+	if err == io.EOF {
+		err = nil
+	}
+
+	return
 }
 
 func readAll(ct ComplexToken, ch chan<- Token) error {

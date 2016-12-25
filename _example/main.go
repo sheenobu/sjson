@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/sheenobu/sjson/pkg/sjson"
@@ -23,7 +22,7 @@ func main() {
 	go func() {
 		defer close(ch)
 		err = sjson.ReadAll(f, ch)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			panic(err)
 		}
 	}()
