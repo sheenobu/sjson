@@ -364,7 +364,7 @@ func TestDecoder(t *testing.T) {
 
 	Convey("A JSON Array of numbers and strings and objects should decode into an Array token", t, func() {
 
-		var r = bufio.NewReader(strings.NewReader(`[{"key":12},   1 ]`))
+		var r = bufio.NewReader(strings.NewReader(`[{"key":  12 },   1 ]`))
 		dec := NewDecoder(r)
 
 		t, err := dec.Next()

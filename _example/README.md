@@ -13,12 +13,7 @@ blocks until it is finished so we do this in a goroutine:
 	go func() {
 		defer close(ch)
 		err = sjson.ReadAll(f, ch)
-```
-
-EOF is an error we want to ignore (maybe make ReadAll hide EOF?):
-
-```go
-		if err != nil && err != io.EOF {
+		if err != nil {
 			panic(err)
 		}
 	}()

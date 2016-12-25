@@ -1,8 +1,35 @@
-## pkg/sjson
+# sjson
 
-streaming json parser implementation
+Streaming json parser implementation
 
-## pkg/jdyn
+## Usage
 
-Parsing of dynamic json structures via reflection and 
-`type` fields within the json body.
+Once you create the decoder, you can iterate
+over the tokens:
+
+```go
+r := strings.NewReader(`{"hello":"world"}`)
+dec := sjson.NewDecoder(r)
+
+for t, err := dec.Next(); err != nil && t != nil; t, err = dec.Next() {
+    // iterate over every token
+}
+```
+
+## Supported tokens
+
+ * Simple Tokens:
+   * NumberType
+   * StringType
+   * BoolType
+   * NullType
+
+ * Complex Tokens:
+   * ObjectType
+   * ArrayType
+
+ * Special Tokens
+   * MemberType
+   * EndType
+
+NOTE: whitespace is currently ignored
