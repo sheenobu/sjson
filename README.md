@@ -2,6 +2,10 @@
 
 Streaming json parser implementation
 
+## Project Status
+
+I am not sure where i left this two years ago...
+
 ## Usage
 
 Once you create the decoder, you can iterate

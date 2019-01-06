@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sheenobu/sjson/pkg/sjson"
+	"github.com/sheenobu/sjson"
 )
 
 func main() {
